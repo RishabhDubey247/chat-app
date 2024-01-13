@@ -1,0 +1,77 @@
+// views/index.pug
+
+doctype html
+html
+  head
+    title Chat Application
+    link(rel='stylesheet', href='/styles/chat.css')
+  body
+    #chat-container
+      #user-list
+        ul
+          // User list will be dynamically updated here
+      #messages
+        ul#chat-messages
+          // Messages will be displayed here
+      #message-form
+        input#targetUserId(type='text', placeholder='Enter target user name...')
+        input#messageInput(type='text', placeholder='Type your message...')
+        button#sendButton Send
+    script(src='https://cdn.socket.io/4.0.1/socket.io.min.js')  // Include Socket.IO
+    script.
+      const socket = io();
+      let connectedUsers = {}; // Define connectedUsers here
+
+      const targetUserIdInput = document.getElementById('targetUserId');
+      const messageInput = document.getElementById('messageInput');
+      const sendButton = document.getElementById('sendButton');
+      const messagesContainer = document.getElementById('chat-messages');
+      const userListContainer = document.querySelector('#user-list ul');
+
+      // Ask the user for their name when they connect
+      const userName = prompt('Please enter your name:');
+      socket.emit('submit name', userName);
+
+      sendButton.addEventListener('click', () => {
+        const targetUserName = targetUserIdInput.value;
+        const message = messageInput.value;
+        if (targetUserName.trim() !== '' && message.trim() !== '') {
+          const targetUserId = Object.keys(connectedUsers).find(userId => connectedUsers[userId].name === targetUserName);
+          if (targetUserId) {
+            socket.emit('private message', { targetUserId, message });
+            messageInput.value = '';
+          } else {
+            alert('User not found. Please enter a valid user name.');
+          }
+        }
+      });
+
+      socket.on('private message', (data) => {
+        const { senderName, message } = data;
+        const messageElement = document.createElement('li');
+        messageElement.textContent = `${senderName}: ${message}`;
+        messageElement.classList.add('chat-message');
+        messagesContainer.appendChild(messageElement);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight; // Auto-scroll to the bottom
+      });
+
+      // Update user list when a user connects or disconnects
+      socket.on('update user list', (userList) => {
+        userListContainer.innerHTML = ''; // Clear the current user list
+        connectedUsers = {}; // Update connectedUsers
+        userList.forEach(({ id, name }) => {
+          connectedUsers[id] = { name }; // Add user to connectedUsers
+          const userListItem = document.createElement('li');
+          userListItem.textContent = name;
+          userListItem.classList.add('user-list-item');
+
+          // Add click event to initiate private chat
+          userListItem.addEventListener('click', () => {
+            targetUserIdInput.value = name;
+            // Join a private room for this conversation
+            socket.emit('join private room', id);
+          });
+
+          userListContainer.appendChild(userListItem);
+        });
+      });
